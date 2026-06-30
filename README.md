@@ -30,8 +30,6 @@ instead of LDAP (389/636): quieter, and past LDAP-focused controls.
 - **SharpHound-equivalent output** — BloodHound CE
   v6 JSON/ZIP: users, groups, computers, OUs,
   containers, GPOs, trusts, ADCS, ACLs/DCSync.
-- **Forest-aware** — `--searchforest` and recursive
-  trust walking.
 
 </td>
 <td width="50%" valign="top">
@@ -42,8 +40,6 @@ instead of LDAP (389/636): quieter, and past LDAP-focused controls.
   (no NTLM on the wire with `-k`).
 - **OPSEC dials** — connection reuse, LDAP filter
   obfuscation, throttle/jitter, tiered footprint.
-- **Runs from Linux** — resolves target hostnames
-  through the DC's DNS automatically.
 
 </td>
 </tr>
