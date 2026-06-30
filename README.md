@@ -15,6 +15,8 @@ instead of LDAP (389/636): quieter, and past LDAP-focused controls.
 ![Output](https://img.shields.io/badge/BloodHound%20CE-schema%20v6-5b2c6f?style=for-the-badge)
 ![Built on](https://img.shields.io/badge/built%20on-SoaPy-444?style=for-the-badge)
 
+[![Blog](https://img.shields.io/badge/read%20the%20writeup-ADWS%3A%20stealthy%20AD%20enumeration-ff8800?style=for-the-badge)](https://josupalacios99.github.io/blog/en/posts/adws-enumeracion-sigilosa-active-directory/)
+
 </div>
 
 <br>
@@ -74,6 +76,11 @@ parses the SOAP/NBFS responses back into the SharpHound object model and writes 
 > ADWS replaces the **LDAP directory queries only**. Remote *computer*-targeted methods
 > (Sessions, LoggedOn, LocalGroup, UserRights, host checks, CA/DC registry) still use SMB/MSRPC
 > over **445** via impacket. Pure-ADWS collection means avoiding those methods — see [OPSEC tiers](#opsec-tiers).
+
+> [!TIP]
+> For the full background on ADWS — how the protocol works, why it's stealthier than LDAP, and the
+> OPSEC trade-offs — read the writeup:
+> **[ADWS: stealthy Active Directory enumeration](https://josupalacios99.github.io/blog/en/posts/adws-enumeracion-sigilosa-active-directory/)**.
 
 ---
 
@@ -281,6 +288,7 @@ connection reuse, full SharpHound-equivalent object/edge collection). All credit
 transport groundwork to the SoaPy authors.
 
 **References:**
+[Writeup — ADWS: stealthy AD enumeration](https://josupalacios99.github.io/blog/en/posts/adws-enumeracion-sigilosa-active-directory/) ·
 [SoaPy](https://github.com/logangoins/SoaPy) ·
 [SOAPHound](https://github.com/FalconForceTeam/SOAPHound) ·
 [SharpHound](https://github.com/SpecterOps/SharpHound) ·
