@@ -499,9 +499,24 @@ def run_collection(args: argparse.Namespace) -> int:
 
     # WKP always emitted regardless of collect_groups (SharpHound behavior)
 
-    # ── Users (always collected) ──────────────────────────────────────────────
-    users = _run("Users", lambda: UserCollector(**base_kwargs).collect())
-    _say(f"[+] Users: {len(users)}")
+    # Users/Computers are enumerated only when a requested method needs them. A
+    # narrow run (e.g. -c CertServices / CARegistry / DCRegistry / Trusts alone)
+    # then stays targeted instead of sweeping every user and computer.
+    _USER_METHODS = (CollectionMethod.Group | CollectionMethod.ACL |
+                     CollectionMethod.ObjectProps | CollectionMethod.SPNTargets)
+    _COMPUTER_METHODS = (CollectionMethod.LocalGroup | CollectionMethod.Session |
+                         CollectionMethod.LoggedOn | CollectionMethod.RDP |
+                         CollectionMethod.DCOM | CollectionMethod.PSRemote |
+                         CollectionMethod.UserRights | CollectionMethod.ACL |
+                         CollectionMethod.ObjectProps | CollectionMethod.WebClientService |
+                         CollectionMethod.SmbInfo | CollectionMethod.NTLMRegistry)
+    collect_users_objs     = bool(coll_mask & _USER_METHODS)
+    collect_computers_objs = bool(coll_mask & _COMPUTER_METHODS)
+
+    # ── Users ─────────────────────────────────────────────────────────────────
+    if collect_users_objs:
+        users = _run("Users", lambda: UserCollector(**base_kwargs).collect())
+        _say(f"[+] Users: {len(users)}")
 
     # ── SPN Targets ───────────────────────────────────────────────────────────
     if coll_mask & CollectionMethod.SPNTargets:
@@ -518,9 +533,10 @@ def run_collection(args: argparse.Namespace) -> int:
     wkp = _emit_wellknown_principals(cache, domain, domain_sid)
     all_groups = list(groups) + wkp
 
-    # ── Computers (always collected) ──────────────────────────────────────────
-    computers = _run("Computers", lambda: ComputerCollector(**base_kwargs).collect())
-    _say(f"[+] Computers: {len(computers)}")
+    # ── Computers ─────────────────────────────────────────────────────────────
+    if collect_computers_objs:
+        computers = _run("Computers", lambda: ComputerCollector(**base_kwargs).collect())
+        _say(f"[+] Computers: {len(computers)}")
 
     # Apply --excludedcs filter
     if args.excludedcs:

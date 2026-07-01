@@ -96,7 +96,9 @@ class ComputerCollector(BaseCollector):
                 "lastlogontimestamp": obj.get("lastLogonTimestamp", -1),
                 "pwdlastset":       obj.get("pwdLastSet", -1),
                 "serviceprincipalnames": spns,
-                "hasspn":          bool(spns),
+                # NOTE: no "hasspn" on computers — SharpHound omits it (computers
+                # always have SPNs), so a hasspn=true query stays user-only and
+                # doesn't drag every machine account into "Kerberoastable".
                 "email":           None,
                 "useraccountcontrol": uac,
                 "operatingsystem": first(obj, "operatingSystem", None),

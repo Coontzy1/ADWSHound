@@ -64,6 +64,7 @@ _ATTRS_CERT_TPL = [
 ]
 _ATTRS_ISSUANCE = [
     "objectGUID", "cn", "displayName", "distinguishedName", "whenCreated",
+    "flags",  # 1 = per-template OID, 2 = issuance policy (only 2 is emitted)
     "msPKI-Cert-Template-OID", "msDS-OIDToGroupLink",
     "nTSecurityDescriptor",
 ]
@@ -306,7 +307,11 @@ class ADCSCollector:
     def collect_issuancepolicies(self) -> list[IssuancePolicyOutput]:
         self.log.info("Collecting IssuancePolicies …")
         objects = self.client.search_config_nc(_FILTER_ISSUANCE, _ATTRS_ISSUANCE)
-        return [self._process_issuance(obj) for obj in objects]
+        # The OID container holds one auto-generated OID per cert template
+        # (flags=1) plus the real issuance policies (flags=2). SharpHound emits
+        # only the latter — filter to flags=2 or we inflate the count massively.
+        issuance = [o for o in objects if (int(first(o, "flags", 0) or 0) & 2)]
+        return [self._process_issuance(obj) for obj in issuance]
 
     # ── Helpers ──────────────────────────────────────────────────────────────
 

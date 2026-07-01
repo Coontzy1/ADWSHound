@@ -142,7 +142,12 @@ class ResolverCache:
             if not identifier:
                 continue
 
-            tp = TypedPrincipal(ObjectIdentifier=identifier.upper(), ObjectType=obj_type)
+            # BUILTIN groups (CN=Builtin) are real LDAP objects whose objectSid is
+            # S-1-5-32-*, so their raw SID must still be domain-qualified for
+            # BloodHound (DOMAIN-S-1-5-32-544) — otherwise ACE/edge principals to
+            # Administrators etc. are orphaned. _qualify is a no-op for domain SIDs.
+            object_id = self._qualify(sid) if sid else identifier.upper()
+            tp = TypedPrincipal(ObjectIdentifier=object_id, ObjectType=obj_type)
 
             if sid:
                 self._sid[sid.upper()] = tp

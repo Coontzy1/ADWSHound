@@ -78,15 +78,15 @@ class LoggedOnCollector:
             err = CollectionResult(Results=[], Collected=False, FailureReason="No hostname")
             return err, err
 
-        reg_cr   = self._registry_sessions(hostname)
-        priv_cr  = self._privileged_sessions(hostname)
+        comp_sid = (comp.get("objectSid") or "").upper()
+        reg_cr   = self._registry_sessions(hostname, comp_sid)
+        priv_cr  = self._privileged_sessions(hostname, comp_sid)
         return reg_cr, priv_cr
 
     # ── Registry sessions (ProfileList) ─────────────────────────────────────
 
-    def _registry_sessions(self, hostname: str) -> CollectionResult:
+    def _registry_sessions(self, hostname: str, comp_sid: str = "") -> CollectionResult:
         from adwshound.collectors.registry_utils import open_registry, open_hklm, read_dword, enum_subkeys
-        comp_sid = ""  # set during parent call
 
         try:
             with open_registry(hostname, self.domain, self.username,
@@ -111,7 +111,7 @@ class LoggedOnCollector:
                         continue
 
                     user_sid = sid_str.upper()
-                    results.append(SessionResult(UserSID=user_sid, ComputerSID=""))
+                    results.append(SessionResult(UserSID=user_sid, ComputerSID=comp_sid))
 
             return CollectionResult(Results=results, Collected=True)
         except Exception as exc:
@@ -119,7 +119,7 @@ class LoggedOnCollector:
 
     # ── Privileged sessions (NetWkstaUserEnum) ───────────────────────────────
 
-    def _privileged_sessions(self, hostname: str) -> CollectionResult:
+    def _privileged_sessions(self, hostname: str, comp_sid: str = "") -> CollectionResult:
         from impacket.dcerpc.v5 import transport, wkst
         from adwshound.collectors.base import set_dcerpc_creds
 
@@ -156,7 +156,7 @@ class LoggedOnCollector:
                     user_sid = self._sam_cache.get(f"{domain}\\{username}".lower())
 
                 if user_sid:
-                    results.append(SessionResult(UserSID=user_sid.upper(), ComputerSID=""))
+                    results.append(SessionResult(UserSID=user_sid.upper(), ComputerSID=comp_sid))
 
             return CollectionResult(Results=results, Collected=True)
         except Exception as exc:

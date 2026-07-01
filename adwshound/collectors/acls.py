@@ -88,11 +88,14 @@ _WRITABLE_PROP_NAMES: dict[str, str] = {
 }
 
 # SIDs to skip (not interesting for BloodHound graph)
+# NOTE: S-1-5-9 (Enterprise Domain Controllers) is NOT skipped — it holds
+# GetChanges/GetChangesAll/GetChangesInFilteredSet on the domain (DCSync) and
+# SharpHound emits it (domain-qualified).
 _SKIP_SIDS = {
     "S-1-3-0", "S-1-3-1", "S-1-3-2", "S-1-3-3",  # Creator SIDs
+    "S-1-5-10",   # Principal Self (self-referential — SharpHound skips it)
     "S-1-5-18",   # Local System
     "S-1-5-19", "S-1-5-20",
-    "S-1-5-9",    # Enterprise Domain Controllers (too noisy)
 }
 
 # Cache of extended rights loaded from Config NC
@@ -144,52 +147,61 @@ def load_guid_caches(client: "ADWSClient") -> None:
     log.debug("Loaded %d extended rights, %d schema attrs", len(_rights_cache), len(_schema_cache))
 
 
-def _ace_right_name(mask: int, object_type_guid: str | None) -> str | None:
-    """Map ACE access mask (+ optional ObjectType GUID) → BloodHound right name."""
+def _ace_rights(mask: int, object_type_guid: str | None) -> list[str]:
+    """Map an ACE access mask (+ optional ObjectType GUID) → BloodHound rights.
+
+    Returns ALL applicable right names, not just the first: SharpHound emits one
+    edge per right, and a single ACE mask can grant several (e.g. WriteDacl +
+    WriteOwner + GenericWrite + AllExtendedRights). Returning only the first
+    match silently drops WriteOwner/GenericWrite/AllExtendedRights and breaks
+    DCSync detection on the domain.
+    """
     # GENERIC_ALL is a multi-bit mask; require full containment (SharpHound HasFlag
-    # semantics). A truthy `&` would swallow WriteDacl/WriteOwner/WriteProperty,
-    # since their bits are subsets of GENERIC_ALL (0x000F01FF).
+    # semantics). Full control subsumes the component rights → emit only GenericAll.
     if mask & GENERIC_ALL == GENERIC_ALL:
-        return "GenericAll"
+        return ["GenericAll"]
+
+    rights: list[str] = []
     if mask & WRITE_DACL:
-        return "WriteDacl"
+        rights.append("WriteDacl")
     if mask & WRITE_OWNER:
-        return "WriteOwner"
+        rights.append("WriteOwner")
 
     if object_type_guid:
         guid_lower = object_type_guid.lower()
 
         # Extended right targeting a specific GUID (e.g. GetChanges, ForceChangePassword).
         # An unrecognised specific extended right is NOT "AllExtendedRights" — emit no
-        # edge (must not fall through to the all-rights case below, or every benign
-        # per-right ACE becomes a bogus AllExtendedRights edge, e.g. Everyone→Domain Admins).
+        # edge for it (never fall through to the all-rights case, or every benign
+        # per-right ACE becomes a bogus AllExtendedRights edge).
         if mask & DS_CONTROL_ACCESS:
-            return _EXTENDED_RIGHTS.get(guid_lower)  # None if unknown → no edge
+            r = _EXTENDED_RIGHTS.get(guid_lower)
+            if r:
+                rights.append(r)
 
         # Validated write (DS_SELF) on a specific attribute (member, SPN)
         if mask & DS_SELF:
-            right = _VALIDATED_WRITES.get(guid_lower)
-            if right:
-                return right
+            r = _VALIDATED_WRITES.get(guid_lower)
+            if r:
+                rights.append(r)
 
         # Write to a specific property → BloodHound edge only for abusable attrs
         if mask & DS_WRITE_PROP:
-            right = _WRITABLE_PROPS.get(guid_lower)
-            if not right:
+            r = _WRITABLE_PROPS.get(guid_lower)
+            if not r:
                 cn = _schema_cache.get(guid_lower)
                 if cn:
-                    right = _WRITABLE_PROP_NAMES.get(cn.lower())
-            if right:
-                return right
-            return None  # non-abusable specific-property write → no graph edge
+                    r = _WRITABLE_PROP_NAMES.get(cn.lower())
+            if r:
+                rights.append(r)
+    else:
+        # No specific target GUID → all-rights variants.
+        if mask & DS_CONTROL_ACCESS:
+            rights.append("AllExtendedRights")  # grants DCSync etc.
+        if mask & DS_WRITE_PROP:
+            rights.append("GenericWrite")
 
-    # Control access on ALL extended rights (no specific GUID) — grants DCSync etc.
-    if mask & DS_CONTROL_ACCESS:
-        return "AllExtendedRights"
-
-    # Write ALL properties with no specific attribute target = GenericWrite
-    if mask & DS_WRITE_PROP:
-        return "GenericWrite"
+    return rights
 
     return None
 
@@ -297,20 +309,21 @@ def parse_acl(
                 except Exception:
                     pass
 
-        right = _ace_right_name(mask, object_type_guid)
-        if right is None:
+        rights = _ace_rights(mask, object_type_guid)
+        if not rights:
             continue
 
         tp = cache.resolve_sid(sid)
         if not tp:
             tp = TypedPrincipal(ObjectIdentifier=cache.qualify_sid(sid), ObjectType="Base")
 
-        aces.append(ACE(
-            PrincipalSID=tp.ObjectIdentifier,
-            PrincipalType=tp.ObjectType,
-            RightName=right,
-            IsInherited=is_inherited,
-        ))
+        for right in rights:
+            aces.append(ACE(
+                PrincipalSID=tp.ObjectIdentifier,
+                PrincipalType=tp.ObjectType,
+                RightName=right,
+                IsInherited=is_inherited,
+            ))
 
     return aces, is_protected
 
