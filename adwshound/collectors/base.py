@@ -179,9 +179,9 @@ def dn_to_domain(dn: str) -> str:
     return ".".join(dc_parts)
 
 
-def object_name(cn: str, domain: str) -> str:
+def object_name(cn: str | None, domain: str) -> str:
     """Build BloodHound display name: NAME@DOMAIN.LOCAL"""
-    return f"{cn.upper()}@{domain.upper()}"
+    return f"{(cn or 'UNKNOWN').upper()}@{domain.upper()}"
 
 
 class BaseCollector(ABC):
