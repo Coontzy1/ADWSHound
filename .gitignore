@@ -23,6 +23,7 @@ dist/
 build/
 *.egg-info/
 *.egg
+uv.lock
 
 # BloodHound output — may contain AD data
 *.zip
